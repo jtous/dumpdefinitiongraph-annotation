@@ -1,0 +1,7 @@
+@Singleton
+@DumpDefinitionGraph
+composite Main<Spec conformsto TotoType> {
+	contains Boot as boot;
+	contains Spec as toto;
+	binds boot.toto to toto.toto;
+}

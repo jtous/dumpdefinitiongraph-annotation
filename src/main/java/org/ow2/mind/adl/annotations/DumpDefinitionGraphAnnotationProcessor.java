@@ -43,6 +43,9 @@ import org.ow2.mind.adl.ast.ComponentContainer;
 import org.ow2.mind.adl.ast.DefinitionReference;
 import org.ow2.mind.adl.ast.DefinitionReferenceContainer;
 import org.ow2.mind.adl.ast.MindInterface;
+import org.ow2.mind.adl.generic.ast.FormalTypeParameter;
+import org.ow2.mind.adl.generic.ast.FormalTypeParameterContainer;
+import org.ow2.mind.adl.generic.ast.FormalTypeParameterReference;
 import org.ow2.mind.annotation.Annotation;
 import org.ow2.mind.idl.IDLLoader;
 import org.ow2.mind.idl.ast.IDL;
@@ -145,8 +148,8 @@ AbstractADLLoaderAnnotationProcessor {
 		}
 		dotLines.add(defDotName + "[URL=\""+ defSource +"\"shape=box,label=<"+definition.getName()+">];");
 
-		
-		
+
+
 		try {
 			//Interfaces
 			for (Interface itf : ((InterfaceContainer) definition).getInterfaces()) {
@@ -210,12 +213,25 @@ AbstractADLLoaderAnnotationProcessor {
 			final Component[] subComponents = ((ComponentContainer) definition).getComponents();
 			if (subComponents != null) {
 				for (Component subComp : subComponents) {
+					
 					DefinitionReference defRef = subComp.getDefinitionReference();
-					String defRefDotName = defRef.getName().replace('.', '_');
+					String paramRef = ((FormalTypeParameterReference) subComp).getTypeParameterReference();
 
 					try {
+						if (paramRef != null) {
+							FormalTypeParameter[] params = ((FormalTypeParameterContainer) definition).getFormalTypeParameters();
+							for (FormalTypeParameter param :params) {
+								if (param.getName().equals(paramRef)) {
+									defRef = param.getDefinitionReference();
+								}
+							}
+						}
+
 						Definition def = adlLoaderItf.load(defRef.getName(), context);
+						String defRefDotName = defRef.getName().replace('.', '_');
+
 						String adlSource = def.astGetSource();
+						
 						//removing line information. (using lastIndexOf instead of split[0] as ":" is a valid path character)
 						if (adlSource != null) // Do  not test os if the source is null 
 						{
@@ -228,15 +244,16 @@ AbstractADLLoaderAnnotationProcessor {
 						}
 						dotLines.add(defRefDotName + "[URL=\""+ adlSource +"\"shape=box,label=<" + defRef.getName() + ">];");
 						dotLines.add(defRefDotName+"->"+defDotName+"[arrowhead=diamond];");
-						
+
 						adlLoaderItf.load(defRef.getName(), context);
 						printDefinitionDeps(def);
 					} catch (ADLException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
-				}
+				} 
 			}
 		}
 	}
 }
+

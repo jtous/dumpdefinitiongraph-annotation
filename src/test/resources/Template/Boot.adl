@@ -1,0 +1,10 @@
+@Singleton
+primitive Boot {
+	requires Toto as toto;
+	source {{
+		int main(void){
+			CALL(toto,toto)();
+			return 0;
+		}
+	}};
+}
