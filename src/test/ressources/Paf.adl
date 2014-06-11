@@ -1,0 +1,8 @@
+primitive Paf extends pkg.Pif {
+	provides Tata as tata;
+	source {{ 
+		int main(void){return 1;}
+		void METH(tata,toto)(void){}
+		void METH(tata,tata)(void){}
+	}};
+}

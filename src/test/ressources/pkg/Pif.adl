@@ -1,0 +1,7 @@
+primitive pkg.Pif {
+	provides Toto as toto;
+	requires optional pkg.Titi as titi;
+	source {{ 
+		void METH(toto,toto)(void){}
+	}};
+}

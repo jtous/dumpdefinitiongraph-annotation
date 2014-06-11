@@ -1,0 +1,8 @@
+@DumpDefinitionGraph
+composite pkg2.Composite {
+	contains Paf as paf;
+	contains Pouf as pouf;
+	binds pouf.tata to paf.tata;
+	binds paf.titi to this.titi;
+	requires optional pkg.Titi as titi;
+}

@@ -1,0 +1,3 @@
+interface pkg.Titi {
+	void titi(void);
+}

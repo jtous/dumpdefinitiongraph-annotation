@@ -1,0 +1,6 @@
+primitive Pouf {
+	requires Tata as tata;
+	source {{
+		void METH(dummy)(void){CALL(tata,tata)();}
+	}};
+}
