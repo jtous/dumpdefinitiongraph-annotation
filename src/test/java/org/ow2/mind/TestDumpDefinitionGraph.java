@@ -65,7 +65,7 @@ public class TestDumpDefinitionGraph extends AbstractDumpDefinitionGraphComposit
 	public void testTemplate() throws Exception {
 		cleanBuildDir();
 		initSourcePath(getDepsDir("memory/api/Allocator.itf").getAbsolutePath(),"Template");
-		runner.compile("Main<Toto>", null);
+		runner.compileRunAndCheck("Main<Toto>", null);
 	}
 	
 	/**
@@ -73,9 +73,20 @@ public class TestDumpDefinitionGraph extends AbstractDumpDefinitionGraphComposit
 	 * @throws Exception
 	 */
 	@Test(groups = {"checkin"})
-	public void testAnonymous1() throws Exception {
+	public void testAnonymous() throws Exception {
 		cleanBuildDir();
 		initSourcePath(getDepsDir("memory/api/Allocator.itf").getAbsolutePath(),"Anonymous");
 		runner.compileRunAndCheck("Main", null);
+	}
+	
+	/**
+	 * Test flattening anonymous components (with inlined content)
+	 * @throws Exception
+	 */
+	@Test(groups = {"checkin"})
+	public void testAnonymous2() throws Exception {
+		cleanBuildDir();
+		initSourcePath(getDepsDir("memory/api/Allocator.itf").getAbsolutePath(),"Anonymous");
+		runner.compileRunAndCheck("Sub", null);
 	}
 }

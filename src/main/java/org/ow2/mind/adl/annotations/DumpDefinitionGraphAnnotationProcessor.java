@@ -23,11 +23,13 @@
 package org.ow2.mind.adl.annotations;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 import org.objectweb.fractal.adl.ADLException;
+import org.objectweb.fractal.adl.ContextLocal;
 import org.objectweb.fractal.adl.Definition;
 import org.objectweb.fractal.adl.Loader;
 import org.objectweb.fractal.adl.Node;
@@ -36,6 +38,8 @@ import org.objectweb.fractal.adl.interfaces.InterfaceContainer;
 import org.objectweb.fractal.adl.types.TypeInterface;
 import org.ow2.mind.adl.annotation.ADLLoaderPhase;
 import org.ow2.mind.adl.annotation.AbstractADLLoaderAnnotationProcessor;
+import org.ow2.mind.adl.anonymous.AnonymousDefinitionExtractor;
+import org.ow2.mind.adl.anonymous.ast.AnonymousDefinitionContainer;
 import org.ow2.mind.adl.ast.ASTHelper;
 import org.ow2.mind.adl.ast.MindDefinition;
 import org.ow2.mind.adl.ast.Component;
@@ -78,6 +82,7 @@ AbstractADLLoaderAnnotationProcessor {
 	private String buildDir;
 
 	Set<String> dotLines = new HashSet<String>();
+
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -93,6 +98,7 @@ AbstractADLLoaderAnnotationProcessor {
 					throws ADLException {
 		assert annotation instanceof DumpDefinitionGraph;
 		this.context = context;
+
 
 		buildDir = ((File) context.get(BasicOutputFileLocator.OUTPUT_DIR_CONTEXT_KEY)).getPath() +  File.separator;
 		File outputFile = new File(buildDir, definition.getName().replace('.', '_')+".gv");
@@ -116,25 +122,176 @@ AbstractADLLoaderAnnotationProcessor {
 		return null;
 	}
 
-	private void printInterfaceDeps(String itfSig) {
+	private void printDefinitionDeps(Definition definition) {
+
+		//Declare current definition
+		dotLines.add(dotName(definition) + "[URL=\""+ getSource(definition) +"\"shape=box,label=<"+dotLabel(definition)+">];");
+
+
+		interfaceInstancesDeps(definition);
+
+		definitionInheritanceDeps(definition);
+
+		compositionDeps(definition);
+
+	}
+
+	private void interfaceInheritanceDeps(String itfSig) {
 		try {
 			String itfDotName = itfSig.replace('.', '_');
+
 			IDL idl = idlLoaderItf.load(itfSig ,context);
+
 			String itfRefSig = ((InterfaceDefinition)idl).getExtends();
+
 			if (itfRefSig != null ) {
 				String itfRefDotName = itfRefSig.replace('.', '_');
 				//dotLines.add(itfRefSig);
 				dotLines.add(itfRefDotName + "[label=<" + itfRefSig + ">];");
 				dotLines.add(itfRefDotName+"->"+itfDotName+"[arrowhead=none, arrowtail=empty, style=dashed, dir=back];");
 			}
+
 		} catch (ADLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
-	private void printDefinitionDeps(Definition definition) {
-		//Declare current definition
-		String defDotName = definition.getName().replace('.', '_');
+
+	private void interfaceInstancesDeps(Definition definition){
+		try {
+			//Interfaces
+			for (Interface itf : ((InterfaceContainer) definition).getInterfaces()) {
+
+				String itfSource = idlLoaderItf.load(((MindInterface)itf).getSignature(), context).astGetSource();
+				int i = itfSource.lastIndexOf(":");
+				itfSource = itfSource.substring(0,i);
+				File itfFile=new File(itfSource);
+				itfSource = itfFile.getAbsolutePath();
+				if (((MindInterface)itf).getRole().equals(TypeInterface.SERVER_ROLE)) {
+					String itfDotName = ((MindInterface)itf).getSignature().replace('.', '_').replace('$', '_');
+					dotLines.add(itfDotName + "[label=<<i>" + ((MindInterface)itf).getSignature() + "</i>>,URL=\"" + itfSource + "\"];");
+					dotLines.add(itfDotName+"->"+dotName(definition)+"[arrowhead=none, arrowtail=empty, style=dashed, dir=back, color=red];");
+				}
+				if (((MindInterface)itf).getRole().equals(TypeInterface.CLIENT_ROLE)) {
+
+					String itfDotName = ((MindInterface)itf).getSignature().replace('.', '_').replace('$', '_');
+					dotLines.add(itfDotName + "[label=<<i>" + ((MindInterface)itf).getSignature() + "</i>>,URL=\"" + itfSource + "\"];");
+					dotLines.add(itfDotName+"->"+dotName(definition)+"[dir=back, arrowtail=vee, style=dashed, color=green];");
+				}
+				interfaceInheritanceDeps(((MindInterface)itf).getSignature());
+			}
+		} catch (ADLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	private void definitionInheritanceDeps(Definition definition){
+		//Inheritance
+		DefinitionReferenceContainer extendz = ((MindDefinition) definition).getExtends();
+		if (extendz != null) {
+			DefinitionReference[] defRefs = extendz.getDefinitionReferences();
+			for (DefinitionReference defRef : defRefs){
+				try {
+					Definition def = adlLoaderItf.load(defRef.getName(), context);
+					dotLines.add(dotName(defRef) + "[URL=\""+ getSource(def) + "\"shape=box,label=<" + dotLabel(defRef) + ">];");
+					dotLines.add(dotName(defRef) + "->"+dotName(definition) + "[arrowhead=none, arrowtail=empty, dir=back];");
+					//adlLoaderItf.load(defRef.getName(), context);
+					printDefinitionDeps(def);
+				} catch (ADLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+
+	private void compositionDeps(Definition definition){
+		//Composition
+		final ContextLocal<Map<String, Integer>> contextualCounters = new ContextLocal<Map<String, Integer>>();
+		if (ASTHelper.isComposite(definition)) {	
+			final Component[] subComponents = ((ComponentContainer) definition).getComponents();
+			if (subComponents != null) {
+				for (Component subComp : subComponents) {
+					try {
+						DefinitionReference defRef = subComp.getDefinitionReference();
+						Definition def = null;
+						if (defRef == null) {
+							//subComp conforms to a Type passed as template 
+							if (subComp instanceof FormalTypeParameterReference) {
+								String paramRef = ((FormalTypeParameterReference) subComp).getTypeParameterReference();
+								if (paramRef != null) {
+									FormalTypeParameter[] params = ((FormalTypeParameterContainer) definition).getFormalTypeParameters();
+									for (FormalTypeParameter param :params) {
+										if (param.getName().equals(paramRef)) {
+											defRef = param.getDefinitionReference();
+											def = adlLoaderItf.load(defRef.getName(), context);
+										}
+									}
+								}
+							}
+
+							//subComp is an inlined anonymous component
+							if ((subComp instanceof AnonymousDefinitionContainer)) {
+								//The following has been copy pasted from anonymousDefinitionExtractorImpl
+								//anonymousDefinitionExtractor could not be used as it also modify anonymous definitions
+								//and causes conflict in the anonymous loading phase latter
+								def = ((AnonymousDefinitionContainer) subComp).getAnonymousDefinition(); 
+								// get a name for this definition
+							    Map<String, Integer> counters = contextualCounters.get(context);
+							    if (counters == null) {
+							      counters = new HashMap<String, Integer>();
+							      contextualCounters.set(context, counters);
+							    }
+							    final String topLevelName = definition.getName();
+							    Integer counter = counters.get(topLevelName);
+							    if (counter == null) {
+							      counter = 0;
+							    }
+							    counters.put(topLevelName, counter + 1);
+							    final String defName = topLevelName + "$" + counter;
+							    def.setName(defName);
+							    //End of copy paste from anonymousDefinitionExtractorImpl
+							}
+						} else {
+							def = adlLoaderItf.load(defRef.getName(), context);
+						}
+
+						if (def != null) {
+							dotLines.add(dotName(def) + "[URL=\"" + getSource(def) + "\"shape=box,label=<" + dotLabel(def) + ">];");
+							dotLines.add(dotName(def) + "->" + dotName(definition)+"[arrowhead=diamond];");
+
+							//adlLoaderItf.load(defRef.getName(), context);
+							printDefinitionDeps(def);
+						}
+					} catch (ADLException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				} 
+			}
+		} 
+	}
+
+
+
+	private String dotName(Definition definition){
+		return definition.getName().replace('.', '_').replace("$", "_anon_");
+	}
+
+	private String dotLabel(Definition definition){
+		return definition.getName().replace("$", "_anon_");
+	}
+
+	private String dotLabel(DefinitionReference definitionReference){
+		return definitionReference.getName().replace("$", "_anon_");
+	}
+
+	private String dotName(DefinitionReference definitionReference){
+		return definitionReference.getName().replace('.', '_').replace("$", "_anon_");
+	}
+
+	private String getSource(Definition definition){
 		String defSource = definition.astGetSource();
 		//removing line information. (using lastIndexOf instead of split[0] as ":" is a valid path character)
 		if (defSource != null) // Do  not test os if the source is null 
@@ -146,114 +303,7 @@ AbstractADLLoaderAnnotationProcessor {
 				defSource = defSource.substring(0,defSource.lastIndexOf(":"));
 			}
 		}
-		dotLines.add(defDotName + "[URL=\""+ defSource +"\"shape=box,label=<"+definition.getName()+">];");
-
-
-
-		try {
-			//Interfaces
-			for (Interface itf : ((InterfaceContainer) definition).getInterfaces()) {
-
-				String itfSource = idlLoaderItf.load(((MindInterface)itf).getSignature(), context).astGetSource();
-				int i = itfSource.lastIndexOf(":");
-				itfSource = itfSource.substring(0,i);
-				File itfFile=new File(itfSource);
-				itfSource = itfFile.getAbsolutePath();
-				if (((MindInterface)itf).getRole().equals(TypeInterface.SERVER_ROLE)) {
-					String itfDotName = ((MindInterface)itf).getSignature().replace('.', '_');
-					dotLines.add(itfDotName + "[label=<<i>" + ((MindInterface)itf).getSignature() + "</i>>,URL=\"" + itfSource + "\"];");
-					dotLines.add(itfDotName+"->"+defDotName+"[arrowhead=none, arrowtail=empty, style=dashed, dir=back, color=red];");
-				}
-				if (((MindInterface)itf).getRole().equals(TypeInterface.CLIENT_ROLE)) {
-
-					String itfDotName = ((MindInterface)itf).getSignature().replace('.', '_');
-					dotLines.add(itfDotName + "[label=<<i>" + ((MindInterface)itf).getSignature() + "</i>>,URL=\"" + itfSource + "\"];");
-					dotLines.add(itfDotName+"->"+defDotName+"[dir=back, arrowtail=vee, style=dashed, color=green];");
-				}
-				printInterfaceDeps(((MindInterface)itf).getSignature());
-			}
-		} catch (ADLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-
-		//Inheritance
-		DefinitionReferenceContainer extendz = ((MindDefinition) definition).getExtends();
-		if (extendz != null) {
-			DefinitionReference[] defRefs = extendz.getDefinitionReferences();
-			for (DefinitionReference defRef : defRefs){
-				try {
-					String defRefDotName = defRef.getName().replace('.', '_');
-					Definition def = adlLoaderItf.load(defRef.getName(), context);
-					String adlSource = def.astGetSource();
-					//removing line information. (using lastIndexOf instead of split[0] as ":" is a valid path character)
-					if (adlSource != null) // Do  not test os if the source is null 
-					{
-						if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) {
-							adlSource = adlSource.substring(1,adlSource.lastIndexOf(":"));
-						} else {
-							//Somehow windows paths come here with an extra "/" in front of the Drive letter.
-							adlSource = adlSource.substring(0,adlSource.lastIndexOf(":"));
-						}
-					}
-					dotLines.add(defRefDotName + "[URL=\""+ adlSource +"\"shape=box,label=<" + defRef.getName() + ">];");
-					dotLines.add(defRefDotName+"->"+defDotName+"[arrowhead=none, arrowtail=empty, dir=back];");
-					adlLoaderItf.load(defRef.getName(), context);
-					printDefinitionDeps(def);
-				} catch (ADLException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-		}
-
-		//Composition
-		if (ASTHelper.isComposite(definition)) {	
-			final Component[] subComponents = ((ComponentContainer) definition).getComponents();
-			if (subComponents != null) {
-				for (Component subComp : subComponents) {
-					
-					DefinitionReference defRef = subComp.getDefinitionReference();
-					String paramRef = ((FormalTypeParameterReference) subComp).getTypeParameterReference();
-
-					try {
-						if (paramRef != null) {
-							FormalTypeParameter[] params = ((FormalTypeParameterContainer) definition).getFormalTypeParameters();
-							for (FormalTypeParameter param :params) {
-								if (param.getName().equals(paramRef)) {
-									defRef = param.getDefinitionReference();
-								}
-							}
-						}
-
-						Definition def = adlLoaderItf.load(defRef.getName(), context);
-						String defRefDotName = defRef.getName().replace('.', '_');
-
-						String adlSource = def.astGetSource();
-						
-						//removing line information. (using lastIndexOf instead of split[0] as ":" is a valid path character)
-						if (adlSource != null) // Do  not test os if the source is null 
-						{
-							if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) {
-								adlSource = adlSource.substring(1,adlSource.lastIndexOf(":"));
-							} else {
-								//Somehow windows paths come here with an extra "/" in front of the Drive letter.
-								adlSource = adlSource.substring(0,adlSource.lastIndexOf(":"));
-							}
-						}
-						dotLines.add(defRefDotName + "[URL=\""+ adlSource +"\"shape=box,label=<" + defRef.getName() + ">];");
-						dotLines.add(defRefDotName+"->"+defDotName+"[arrowhead=diamond];");
-
-						adlLoaderItf.load(defRef.getName(), context);
-						printDefinitionDeps(def);
-					} catch (ADLException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				} 
-			}
-		}
+		return defSource; 
 	}
 }
 

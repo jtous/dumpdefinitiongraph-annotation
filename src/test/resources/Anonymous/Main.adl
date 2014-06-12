@@ -1,0 +1,4 @@
+@DumpDefinitionGraph
+composite Main {
+	contains Sub as sub;
+}
