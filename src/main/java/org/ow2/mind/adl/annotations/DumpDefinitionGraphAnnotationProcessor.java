@@ -236,7 +236,8 @@ AbstractADLLoaderAnnotationProcessor {
 								//The following has been copy pasted from anonymousDefinitionExtractorImpl
 								//anonymousDefinitionExtractor could not be used as it also modify anonymous definitions
 								//and causes conflict in the anonymous loading phase latter
-								def = ((AnonymousDefinitionContainer) subComp).getAnonymousDefinition(); 
+								if (((AnonymousDefinitionContainer) subComp).getAnonymousDefinition() != null) {
+									def = ((AnonymousDefinitionContainer) subComp).getAnonymousDefinition();
 								// get a name for this definition
 							    Map<String, Integer> counters = contextualCounters.get(context);
 							    if (counters == null) {
@@ -252,6 +253,7 @@ AbstractADLLoaderAnnotationProcessor {
 							    final String defName = topLevelName + "$" + counter;
 							    def.setName(defName);
 							    //End of copy paste from anonymousDefinitionExtractorImpl
+								}
 							}
 						} else {
 							def = adlLoaderItf.load(defRef.getName(), context);
