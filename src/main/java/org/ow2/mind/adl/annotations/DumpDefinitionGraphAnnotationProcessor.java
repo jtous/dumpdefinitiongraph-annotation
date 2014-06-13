@@ -36,6 +36,8 @@ import org.objectweb.fractal.adl.Node;
 import org.objectweb.fractal.adl.interfaces.Interface;
 import org.objectweb.fractal.adl.interfaces.InterfaceContainer;
 import org.objectweb.fractal.adl.types.TypeInterface;
+import org.ow2.mind.adl.BasicDefinitionReferenceResolver;
+import org.ow2.mind.adl.DefinitionReferenceResolver;
 import org.ow2.mind.adl.annotation.ADLLoaderPhase;
 import org.ow2.mind.adl.annotation.AbstractADLLoaderAnnotationProcessor;
 import org.ow2.mind.adl.anonymous.AnonymousDefinitionExtractor;
@@ -77,6 +79,9 @@ AbstractADLLoaderAnnotationProcessor {
 
 	@Inject
 	protected Loader adlLoaderItf;
+	
+	@Inject
+	private DefinitionReferenceResolver  definitionResolver;
 
 	private Map<Object,Object> context;
 	private String buildDir;
@@ -215,6 +220,7 @@ AbstractADLLoaderAnnotationProcessor {
 				for (Component subComp : subComponents) {
 					try {
 						DefinitionReference defRef = subComp.getDefinitionReference();
+						definitionResolver.resolve(defRef, definition, context);
 						Definition def = null;
 						if (defRef == null) {
 							//subComp conforms to a Type passed as template 
@@ -278,7 +284,7 @@ AbstractADLLoaderAnnotationProcessor {
 
 
 	private String dotName(Definition definition){
-		return definition.getName().replace('.', '_').replace("$", "_anon_");
+		return definition.getName().replace('.', '_').replace("$", "_anon_") + "_COMP";
 	}
 
 	private String dotLabel(Definition definition){
@@ -290,7 +296,7 @@ AbstractADLLoaderAnnotationProcessor {
 	}
 
 	private String dotName(DefinitionReference definitionReference){
-		return definitionReference.getName().replace('.', '_').replace("$", "_anon_");
+		return definitionReference.getName().replace('.', '_').replace("$", "_anon_") + "_COMP";
 	}
 
 	private String getSource(Definition definition){
